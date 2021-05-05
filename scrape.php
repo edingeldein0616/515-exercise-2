@@ -36,18 +36,29 @@
         <tbody>
 
             <?php
+            ini_set('display_errors', 1);
+
             require 'AutomaticIndexer.php';
+            require 'IndexDatabase.php';
 
             $url = trim($_POST["url"]);
 
             $indexer = new AutomaticIndexer("stopwords.txt", 2);
-
             $indexer->index($url);
-
             $invertedIndex = $indexer->getIndex();
 
+            $db = new IndexDatabase("localhost", "root", "root", "erich_dingeldein");
+            foreach($invertedIndex as $termId => $index) {
+                $db->insert("terms (termId, term)", "('$termId','" . $index->getTerm() ."')");
+                $docFreq = $index->getDocFreq();
+                foreach($docFreq as $docId => $freq) {
+                    $db->insert("documents (docId)", "('" . $docId . "')");
+                    $db->insert("inverted_index (termId, docId, freq)", "('$termId','$docId',$freq)");
+                }
+            }
+
             foreach ($invertedIndex as $id => $value) {
-                echo "<tr><td>$id</td>";
+                echo "<tr><td><a href=\"lookup.php?id=$id\">$id</a></td>";
                 echo "<td>" . $value->getTerm() . "</td>";
                 echo "<td>" . $value->getTotalFrequency() . "</td></tr>";
             }

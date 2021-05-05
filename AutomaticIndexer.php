@@ -51,9 +51,7 @@ class AutomaticIndexer {
 
         foreach($tokenized as $token) {
             $this->invertedIndex->index($token, $urlId);
-        }
-
-        return $this->invertedIndex;
+        }        
     }
 
     /**
