@@ -1,6 +1,8 @@
 <html>
 
 <head>
+    <title>Automatic Indexer</title>
+
     <style>
         table {
             font-family: Arial, Helvetica, sans-serif;
@@ -43,7 +45,7 @@
             foreach ($invertedIndex->getIndex() as $id => $value) {
                 echo "<tr><td>$id</td>";
                 echo "<td>" . $value->getTerm() . "</td>";
-                echo "<td>" . $value->getReferenceCount() . "</td></tr>";
+                echo "<td>" . $value->getTotalFrequency() . "</td></tr>";
             }
 
             ?>
