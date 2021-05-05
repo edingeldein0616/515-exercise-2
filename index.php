@@ -38,11 +38,13 @@
             <?php
             require 'AutomaticIndexer.php';
 
-            $indexer = new AutomaticIndexer("stopwords.txt");
+            $indexer = new AutomaticIndexer("stopwords.txt", 2);
 
-            $invertedIndex = $indexer->index("https://www.w3schools.com");
+            $indexer->index("https://www.w3schools.com");
 
-            foreach ($invertedIndex->getIndex() as $id => $value) {
+            $invertedIndex = $indexer->getIndex();
+
+            foreach ($invertedIndex as $id => $value) {
                 echo "<tr><td>$id</td>";
                 echo "<td>" . $value->getTerm() . "</td>";
                 echo "<td>" . $value->getTotalFrequency() . "</td></tr>";

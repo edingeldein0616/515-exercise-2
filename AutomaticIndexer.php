@@ -11,7 +11,8 @@ class AutomaticIndexer {
      * Static field for temporary page dump file name
      */
     private static $dumpfile = "pageDump.txt";
-    
+    private static $threshold;
+
     private $stopwords;
     private $invertedIndex;
 
@@ -20,8 +21,11 @@ class AutomaticIndexer {
      * 
      *  @param string $stopwordFilename
      *      The name of the file containing stopwords to filter out of text.
+     * 
+     *  @param int $threshold
+     *      The minimum frequency of a term in a document. Terms under the threshold will be ignored on returns.
      */
-    function __construct($stopwordFilename) {
+    function __construct($stopwordFilename, $threshold = 1) {
         $file = fopen($stopwordFilename, "r") or exit("unable to open $stopwordFilename");
         while(!feof($file)) {
             $stopword = trim(fgets($file));
@@ -29,6 +33,7 @@ class AutomaticIndexer {
         }
 
         $this->invertedIndex = new InvertedIndex();
+        self::$threshold = $threshold;
     }
 
     /**
@@ -103,7 +108,7 @@ class AutomaticIndexer {
      * @return resource|false
      *      Pointer to a file, or false if the file cannot be opened.
      */
-    protected function webScrape($url) {
+    private function webScrape($url) {
         if(system("lynx -dump -nolist '$url' > " . self::$dumpfile) === false) {
             exit("Unable to dump contents of $url to " . self::$dumpfile);
         }
@@ -111,7 +116,17 @@ class AutomaticIndexer {
         return fopen(self::$dumpfile, "r");
     }
 
-    protected function filterCharacters($str) {
+    /**
+     * Filters out non-alphanumeric characters and bullet points common in lynx dump files.
+     * Replaces all carriage returns, newlines and tabs with empty character.
+     * 
+     * @param string $str
+     *      String to filter.
+     * 
+     * @return string $str
+     *      Filtered string.
+     */
+    private function filterCharacters($str) {
         // Filter out all non alphanumeric characters except for whitespace
         $str = preg_replace('/[^a-zA-Z\d\s]/', '', $str);
         // Filter out 'o' character that is commonly used as a bullet point
@@ -121,6 +136,11 @@ class AutomaticIndexer {
         $str = str_ireplace(array("\r","\n","\t"), '', $str);
         return $str;
     }
+
+    public function getIndex() {
+        return $this->invertedIndex->getIndexThreshold(AutomaticIndexer::$threshold);
+    }
+
 }
 
 /**
@@ -155,10 +175,10 @@ class InvertedIndex {
     public function index($term, $documentId) {
         $id = $this->getId($term);
         if(array_key_exists($id, $this->index)) {
-            $this->index[$id]->adddocumentId($documentId);
+            $this->index[$id]->addDocument($documentId);
         } else {
             $this->index[$id] = new Index($term);
-            $this->index[$id]->adddocumentId($documentId);
+            $this->index[$id]->addDocument($documentId);
         }
     }
 
@@ -168,8 +188,29 @@ class InvertedIndex {
      * @return Index $index
      *      The index object for the implicit term.
      */
-    public function getIndex() {
+    public function getFullIndex() {
         return $this->index;
+    }
+
+    /** 
+     * Gets a copy of the index with no term document frequencies below the threshold.
+     * 
+     * @param int $threshold
+     *      The threshold used to filter out documents.
+     * 
+     * @return InvertedIndex
+     *      A copy of the inverted index filtered by the threshold.
+     */
+    public function getIndexThreshold($threshold) {
+        $cpy = [];
+
+        foreach($this->index as $termId => $index) {
+            $indexCpy = Index::thresholdCopy($index, $threshold);
+            if($indexCpy)
+                $cpy[$termId] = $indexCpy;
+        }
+
+        return $cpy;
     }
 
     /**
@@ -253,6 +294,16 @@ class Index {
     }
 
     /**
+     * Gets the document frequency dictionary.
+     * 
+     * @return array $docFreq
+     *      Dicionary of document Id to term frequency.
+     */
+    public function getDocFreq() {
+        return $this->docFreq;
+    }
+
+    /**
      * Adds a document to the term. If the document already exists, the frequency is incremented.
      * 
      * @param string $documentId
@@ -266,6 +317,47 @@ class Index {
         } else {
             $this->docFreq[$documentId] = 1;
         }
+    }
+
+    /**
+     * Adds a document id with it's term frequency to the docFreq dictionary.
+     * 
+     * @param string $documentId
+     *      The id of the document.
+     * 
+     * @param int $frequency
+     *      The frequency of the term in the document.
+     */
+    public function addDocumentFrequency($documentId, $frequency) {
+        $this->docFreq[$documentId] = $frequency;
+    }
+
+    /**
+     * Copies an index and filters out docuemnts where the term frequency is below the threshold.
+     * 
+     * @param Index $index
+     *      The index to copy.
+     * 
+     * @param int $threshold
+     *      The threshold used to filter out docuemnt term freqencies.
+     * 
+     * @return Index|null $cpy
+     *      A new index object the the document below threshold freqencies filtered out.
+     *      Returns null if total frequency is lower than the threshold.
+     */
+    public static function thresholdCopy($index, $threshold) {
+        $cpy = new Index($index->getTerm());
+
+        foreach ($index->getDocFreq() as $documentId => $frequency) {
+            if($frequency > $threshold) {
+                $cpy->addDocumentFrequency($documentId, $frequency);
+            }            
+        }
+
+        if($cpy->getTotalFrequency() < $threshold) {
+            return null;
+        }
+        return $cpy;
     }
 }
 
