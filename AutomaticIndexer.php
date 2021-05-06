@@ -11,10 +11,12 @@ class AutomaticIndexer {
      * Static field for temporary page dump file name
      */
     private static $dumpfile = "pageDump.txt";
+    private static $sourcefile = "source.txt";
     private static $threshold;
 
     private $stopwords;
     private $invertedIndex;
+    private $pageData;
 
     /**
      * Object constructor
@@ -33,6 +35,7 @@ class AutomaticIndexer {
         }
 
         $this->invertedIndex = new InvertedIndex();
+        $this->pageData = [];
         self::$threshold = $threshold;
     }
 
@@ -46,29 +49,34 @@ class AutomaticIndexer {
      *      The updated inverted index containing scraped index data from the url.
      */
     public function index($url) {
-        $urlId = hash('md5', $url);
-        $tokenized = $this->tokenize($url);
+        system("touch " . self::$dumpfile . " " . self::$sourcefile);
+
+        $docId = hash('md5', $url);
+
+        $file = $this->webScrape($docId, $url);
+        $tokenized = $this->tokenize($file);
 
         foreach($tokenized as $token) {
-            $this->invertedIndex->index($token, $urlId);
-        }        
+            $this->invertedIndex->index($token, $docId);
+        }
+
+        system("rm " . self::$dumpfile . " " . self::$sourcefile);
     }
 
     /**
-     * Takes an input url and tokenizes the raw text data of the webpage.
+     * Takes an file pointer and tokenizes the raw text data of the webpage.
      * Filters out non-alphanumeric characters, converts to lowercase, and
      * removes stopwords from the text.
      * 
-     * @param string $url
-     *      The url of the webpage to tokenize.
+     * @param string $file
+     *      File pointer to webpage text dump file.
      * 
      * @return array $tokenized
      *      An array of words (tokens) from the webpage text.
      */
-    private function tokenize($url) {
-        system("touch " . self::$dumpfile);
+    private function tokenize($file) {        
         // Get dumpfile of webpage contents
-        $file = $this->webScrape($url);
+        
         $tokenized = [];
 
         while(!feof($file)) {
@@ -91,7 +99,6 @@ class AutomaticIndexer {
         }
 
         fclose($file);
-        system("rm " . self::$dumpfile);
 
         return $tokenized;
     }
@@ -106,7 +113,39 @@ class AutomaticIndexer {
      * @return resource|false
      *      Pointer to a file, or false if the file cannot be opened.
      */
-    private function webScrape($url) {
+    private function webScrape($docId, $url) {
+    
+        if(system("lynx -source '$url' > " . self::$sourcefile) === false) {
+            exit("Unable to dump contents of $url to " . self::$sourcefile);
+        }
+
+        $source = fopen(self::$sourcefile, "r");
+        while(!feof($source)) {
+            $sourceContent = fgets($source);
+        }
+        fclose($source);
+
+        // Get title
+        $title = "*undefined*";
+        $titlePattern = '/<title>.*?<\/title>/';
+        preg_match($titlePattern, $sourceContent, $titleMatches);
+        var_dump($titleMatches);
+        if(count($titleMatches) > 0) $title = strip_tags($titleMatches[0]);
+
+        // Get Description
+        $description = "N/A";
+        $tags = get_meta_tags($url);
+        if($tags !== false) {
+            $meta = array("\n","\r",";",">",">>","<","*");
+            $description = str_replace($meta, '', $tags['description']);
+        }
+
+        $this->pageData[$docId] = [
+            "url" => $url,
+            "title" => $title,
+            "description" => $description
+        ];
+
         if(system("lynx -dump -nolist '$url' > " . self::$dumpfile) === false) {
             exit("Unable to dump contents of $url to " . self::$dumpfile);
         }
@@ -137,6 +176,10 @@ class AutomaticIndexer {
 
     public function getIndex() {
         return $this->invertedIndex->getIndexThreshold(AutomaticIndexer::$threshold);
+    }
+
+    public function getPageData() {
+        return $this->pageData;
     }
 
 }

@@ -42,12 +42,23 @@
             require 'IndexDatabase.php';
 
             $url = trim($_POST["url"]);
+            $username = trim($_POST["username"]);
+            $password = trim($_POST["password"]);
 
             $indexer = new AutomaticIndexer("stopwords.txt", 2);
             $indexer->index($url);
+            $pageData = $indexer->getPageData();
             $invertedIndex = $indexer->getIndex();
 
-            $db = new IndexDatabase("localhost", "root", "root", "erich_dingeldein");
+            $db = new IndexDatabase("localhost", $username, $password, "erich_dingeldein");
+
+            foreach($pageData as $docId => $data) {
+                $url = $data['url'];
+                $title = $data['title'];
+                $description = $data['description'];
+                $db->insert("documents (docId, url, title, description)", "('$docId','$url','$title','$description')");
+            }
+
             foreach($invertedIndex as $termId => $index) {
                 $db->insert("terms (termId, term)", "('$termId','" . $index->getTerm() ."')");
                 $docFreq = $index->getDocFreq();

@@ -15,7 +15,15 @@ echo "<h1>$term</h1>";
 $result2 = $db->select("*", "inverted_index", "termId='$termId'");
 
 while($row = $result2->fetch_assoc()) {
-    echo "<p>" . $row['docId'] . ", " . $row['freq'] . "</p>";
+    $docId = $row['docId'];
+    $result3 = $db->select("*", "documents", "docId='$docId'");
+    if($docData = $result3->fetch_assoc()) {
+        $url = $docData['url'];
+        $title = $docData['title'];
+        $description = $docData['description'];
+        echo "<p>$title, $url, $description</p>";
+    }
+    
 }
 
 

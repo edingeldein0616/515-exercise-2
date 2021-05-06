@@ -1,5 +1,6 @@
 <?php
-//require "AutomaticIndexer.php";
+ini_set('display_errors', 1);
+error_reporting(E_ERROR & ~E_WARNING);
 
 class IndexDatabase {
 
@@ -61,6 +62,19 @@ class IndexDatabase {
 
         self::$selectCount++;
         return $result;
+    }
+
+    public function delete($from, $where ='') {
+        $sql = "DELETE FROM $from";
+
+        if($where !== '') {
+            $sql .= " WHERE $where";
+        }
+        $sql .= ";";
+
+        if($this->connection->query($sql) !== true) {
+            array_push($this->errors, $this->connection->error);
+        }
     }
 }
 
