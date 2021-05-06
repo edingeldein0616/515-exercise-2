@@ -64,6 +64,61 @@ class AutomaticIndexer {
     }
 
     /**
+     * Calls a system command to the lynx web browser that scrapes text data from a
+     * webpage to a dumpfile.
+     * 
+     * @param string $url
+     *      The url of the webpage to scrape.
+     * 
+     * @return resource|false
+     *      Pointer to a file, or false if the file cannot be opened.
+     */
+    private function webScrape($docId, $url) {
+    
+        $html = file_get_contents($url);
+
+        // Create DOM document
+        $dom = new DOMDocument;
+
+        // Parse HTML
+        @$dom->loadHTML($html);
+
+        // Get the title
+        $title = "*undefined*";
+        $nodes = $dom->getElementsByTagName('title');
+        if(count($nodes) > 0) {
+            $title = $nodes->item(0)->nodeValue;
+        }
+
+        // Get meta values
+        $metas = $dom->getElementsByTagName('meta');
+        $description = $keywords = 'N/A';
+        for ($i=0; $i < $metas->length; $i++) { 
+            $meta =  $metas->item($i);
+            $name = $meta->getAttribute('name');
+            if($name === 'Description') {                
+                $description = $meta->getAttribute('content');
+            }
+            else if($name === 'keywords') {
+                $keywords = $meta->getAttribute('Deywords');
+            }
+        }
+
+        $this->pageData[$docId] = [
+            "url" => $url,
+            "title" => $title,
+            "description" => $description,
+            'keywords' => $keywords
+        ];
+
+        if(system("lynx -dump -nolist '$url' > " . self::$dumpfile) === false) {
+            exit("Unable to dump contents of $url to " . self::$dumpfile);
+        }
+
+        return fopen(self::$dumpfile, "r");
+    }
+
+    /**
      * Takes an file pointer and tokenizes the raw text data of the webpage.
      * Filters out non-alphanumeric characters, converts to lowercase, and
      * removes stopwords from the text.
@@ -101,56 +156,6 @@ class AutomaticIndexer {
         fclose($file);
 
         return $tokenized;
-    }
-
-    /**
-     * Calls a system command to the lynx web browser that scrapes text data from a
-     * webpage to a dumpfile.
-     * 
-     * @param string $url
-     *      The url of the webpage to scrape.
-     * 
-     * @return resource|false
-     *      Pointer to a file, or false if the file cannot be opened.
-     */
-    private function webScrape($docId, $url) {
-    
-        if(system("lynx -source '$url' > " . self::$sourcefile) === false) {
-            exit("Unable to dump contents of $url to " . self::$sourcefile);
-        }
-
-        $source = fopen(self::$sourcefile, "r");
-        while(!feof($source)) {
-            $sourceContent = fgets($source);
-        }
-        fclose($source);
-
-        // Get title
-        $title = "*undefined*";
-        $titlePattern = '/<title>.*?<\/title>/';
-        preg_match($titlePattern, $sourceContent, $titleMatches);
-        var_dump($titleMatches);
-        if(count($titleMatches) > 0) $title = strip_tags($titleMatches[0]);
-
-        // Get Description
-        $description = "N/A";
-        $tags = get_meta_tags($url);
-        if($tags !== false) {
-            $meta = array("\n","\r",";",">",">>","<","*");
-            $description = str_replace($meta, '', $tags['description']);
-        }
-
-        $this->pageData[$docId] = [
-            "url" => $url,
-            "title" => $title,
-            "description" => $description
-        ];
-
-        if(system("lynx -dump -nolist '$url' > " . self::$dumpfile) === false) {
-            exit("Unable to dump contents of $url to " . self::$dumpfile);
-        }
-
-        return fopen(self::$dumpfile, "r");
     }
 
     /**
